@@ -17,7 +17,12 @@
     "test": "vitest run",
     "prepublishOnly": "tsc"
   },
-  "keywords": ["cron", "daemon", "mcp", "crontab"],
+  "keywords": [
+    "cron",
+    "daemon",
+    "mcp",
+    "crontab"
+  ],
   "license": "MIT",
   "engines": {
     "node": ">=18"
@@ -26,8 +31,9 @@
     "croner": "^9.0.0"
   },
   "devDependencies": {
-    "typescript": "^5.7.0",
     "@types/node": "^22.0.0",
+    "tsx": "^4.21.0",
+    "typescript": "^5.7.0",
     "vitest": "^3.0.0"
   }
 }
