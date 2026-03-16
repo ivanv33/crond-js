@@ -28,6 +28,7 @@
     "node": ">=18"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.27.1",
     "croner": "^9.0.0"
   },
   "devDependencies": {
