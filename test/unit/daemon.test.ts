@@ -117,6 +117,7 @@ describe('executeJob', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     _setLogger({ log: vi.fn() });
+    stopDaemonProcess(); // clear runningJobs between tests
   });
 
   it('removes job from runningJobs when spawn emits an error', async () => {
@@ -207,6 +208,50 @@ describe('executeJob', () => {
     );
     expect(cmdoutCalls).toHaveLength(1);
     expect(cmdoutCalls[0][1]).toBe('partial');
+  });
+
+  it('does not block other jobs when one job is long-running', async () => {
+    const { spawn } = await import('node:child_process');
+    const mockedSpawn = vi.mocked(spawn);
+    const logFn = vi.fn();
+    _setLogger({ log: logFn });
+
+    const makeFakeChild = () => {
+      const child = new EventEmitter() as any;
+      child.stdout = new EventEmitter();
+      child.stderr = new EventEmitter();
+      return child;
+    };
+
+    const longChild = makeFakeChild();
+    const shortChild = makeFakeChild();
+    mockedSpawn.mockReturnValueOnce(longChild);
+    mockedSpawn.mockReturnValueOnce(shortChild);
+
+    const longJob = { id: 0, cron: {} as any, command: 'sleep 300' };
+    const shortJob = { id: 1, cron: {} as any, command: 'echo fast' };
+
+    // Start long-running job
+    executeJob(longJob);
+    expect(getRunningJobCount()).toBe(1);
+
+    // Short job starts fine even though long job is still running
+    executeJob(shortJob);
+    expect(getRunningJobCount()).toBe(2);
+
+    // Short job completes
+    shortChild.emit('close', 0);
+    expect(getRunningJobCount()).toBe(1);
+
+    // Long job is still running — re-executing it should be skipped (no overlap)
+    mockedSpawn.mockReturnValueOnce(makeFakeChild());
+    executeJob(longJob);
+    expect(getRunningJobCount()).toBe(1); // still 1, not 2
+    expect(mockedSpawn).toHaveBeenCalledTimes(2); // no new spawn
+
+    // Long job finally completes
+    longChild.emit('close', 0);
+    expect(getRunningJobCount()).toBe(0);
   });
 
   it('allows two jobs with the same command but different IDs to run concurrently', async () => {
