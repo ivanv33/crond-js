@@ -58,8 +58,9 @@ if (flags.has('-k') || flags.has('--stop')) {
 
 // --daemon (fork and exit)
 if (flags.has('-d') || flags.has('--daemon')) {
-  const thisFile = fileURLToPath(import.meta.url);
-  const child = spawn(process.execPath, [thisFile, resolvedCrontab, '-p', resolvedPidFile], {
+  // Re-invoke with the same argv[0..1] so tsx/node/bun all work
+  const execArgs = [...process.execArgv, fileURLToPath(import.meta.url), resolvedCrontab, '-p', resolvedPidFile];
+  const child = spawn(process.execPath, execArgs, {
     detached: true,
     stdio: 'ignore',
   });

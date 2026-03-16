@@ -37,9 +37,9 @@ const logDir = join(cronDir, 'log');
 // Ensure daemon is running
 const { running } = checkDaemon(resolvedPidFile);
 if (!running) {
-  // Fork daemon using CLI entry point
-  const cliPath = fileURLToPath(new URL('./cli.js', import.meta.url));
-  const child = spawn(process.execPath, [cliPath, resolvedCrontab, '-p', resolvedPidFile], {
+  // Fork daemon using CLI entry point — preserve tsx/loader args
+  const cliPath = fileURLToPath(new URL('./cli.ts', import.meta.url));
+  const child = spawn(process.execPath, [...process.execArgv, cliPath, resolvedCrontab, '-p', resolvedPidFile], {
     detached: true,
     stdio: 'ignore',
   });
