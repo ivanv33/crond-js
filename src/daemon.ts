@@ -95,7 +95,7 @@ function cleanup(): void {
 
 export function startDaemon(crontabFile: string, options: DaemonOptions = {}): void {
   crontabPath = resolve(crontabFile);
-  cwd = dirname(crontabPath);
+  cwd = process.cwd();
   const cronDir = dirname(crontabPath);
   const logDir = join(cronDir, 'log');
   pidPath = options.pidFile ?? join(cronDir, 'cron.pid');

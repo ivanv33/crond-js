@@ -3,3 +3,4 @@ dist/
 tmp/
 .cron/cron.pid
 .cron/log/
+.cron/output.txt
