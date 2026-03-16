@@ -15,7 +15,7 @@
     "test:unit": "vitest run test/unit/",
     "test:e2e": "vitest run test/e2e/ --testTimeout=120000",
     "test": "vitest run",
-    "test:integration": "bash test/integration/claude-cron.sh",
+    "test:integration": "vitest run test/integration/ --testTimeout=180000",
     "prepublishOnly": "tsc"
   },
   "keywords": [

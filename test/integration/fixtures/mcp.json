@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "cron": {
+      "command": "npx",
+      "args": ["tsx", "{{SRC_DIR}}/mcp.ts", ".cron/crontab"]
+    }
+  }
+}
