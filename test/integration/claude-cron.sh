@@ -2,8 +2,10 @@
 set -euo pipefail
 
 # Integration test: Claude Code + crond-js MCP
-# Starts Claude with the cron MCP server, asks it to schedule a job,
-# waits for execution, and verifies the result.
+#
+# Gives Claude a real task that requires cron scheduling.
+# Claude must figure out it has cron available, write the crontab,
+# and the test verifies the scheduled job actually ran.
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
@@ -11,7 +13,6 @@ TEST_DIR="$PROJECT_ROOT/tmp/integration-$(date +%s)"
 
 cleanup() {
   echo "--- Cleaning up ---"
-  # Kill daemon if running
   if [[ -f "$TEST_DIR/.cron/cron.pid" ]]; then
     local pid
     pid=$(cat "$TEST_DIR/.cron/cron.pid" 2>/dev/null || true)
@@ -28,119 +29,136 @@ echo "Test dir: $TEST_DIR"
 
 # --- Setup ---
 mkdir -p "$TEST_DIR/.cron"
-
-# Empty crontab to start
 touch "$TEST_DIR/.cron/crontab"
 
 # .mcp.json pointing to our dev source
-cat > "$TEST_DIR/.mcp.json" <<'MCPEOF'
+cat > "$TEST_DIR/.mcp.json" <<MCPEOF
 {
   "mcpServers": {
     "cron": {
       "command": "npx",
-      "args": ["tsx", "SRC_DIR/mcp.ts", ".cron/crontab"]
+      "args": ["tsx", "$PROJECT_ROOT/src/mcp.ts", ".cron/crontab"]
     }
   }
 }
 MCPEOF
-sed -i '' "s|SRC_DIR|$PROJECT_ROOT/src|" "$TEST_DIR/.mcp.json"
 
-# Marker file the cron job will create
-MARKER="$TEST_DIR/.cron/marker.txt"
+# CLAUDE.md gives context about this project directory
+cat > "$TEST_DIR/CLAUDE.md" <<'CLAUSEEOF'
+This project has a cron daemon available via MCP. The crontab file is at .cron/crontab.
+To schedule jobs, edit .cron/crontab using standard 5-field cron syntax.
+Use cron_status to check the daemon. Jobs run with cwd set to this directory.
+CLAUSEEOF
 
-echo "--- Step 1: Ask Claude to schedule a cron job ---"
+echo "--- Step 1: Give Claude a task that needs cron ---"
 
-PROMPT="Edit the file .cron/crontab to add a cron job that runs every minute. \
-The job should run: echo \"cron-integration-test-\$(date +%s)\" >> .cron/marker.txt \
-Write only the crontab file, nothing else. Do not explain."
+PROMPT="I need to monitor disk usage in this directory. Set up a scheduled job that \
+runs every minute and appends the output of 'du -sh .' to a file called disk-usage.log \
+in this directory. Verify the cron daemon is running after you set it up."
 
 cd "$TEST_DIR"
-claude -p "$PROMPT" --dangerously-skip-permissions 2>&1 | head -20
+echo "Prompt: $PROMPT"
+echo ""
+CLAUDE_OUTPUT=$(claude -p "$PROMPT" --dangerously-skip-permissions 2>&1)
+echo "$CLAUDE_OUTPUT" | tail -30
 
 echo ""
-echo "--- Crontab contents ---"
-cat "$TEST_DIR/.cron/crontab"
+echo "--- Step 2: Inspect what Claude did ---"
 
-# Verify crontab was written
-if ! grep -q 'marker.txt' "$TEST_DIR/.cron/crontab"; then
-  echo "FAIL: Claude did not write the crontab correctly"
+echo "Crontab:"
+cat "$TEST_DIR/.cron/crontab" 2>/dev/null || echo "(empty or missing)"
+echo ""
+
+# Verify Claude wrote something to the crontab
+if [[ ! -s "$TEST_DIR/.cron/crontab" ]]; then
+  echo "FAIL: Crontab is empty — Claude didn't schedule anything"
   exit 1
 fi
-echo "OK: Crontab written"
+echo "OK: Crontab has content"
 
-echo ""
-echo "--- Step 2: Ask Claude to check cron_status ---"
+# Verify it references disk-usage.log or du
+if ! grep -qE 'du|disk.usage' "$TEST_DIR/.cron/crontab"; then
+  echo "FAIL: Crontab doesn't contain the expected disk usage command"
+  cat "$TEST_DIR/.cron/crontab"
+  exit 1
+fi
+echo "OK: Crontab contains disk usage job"
 
-STATUS_PROMPT="Use the cron_status tool to check the daemon status. Print the raw JSON result."
-STATUS_OUTPUT=$(cd "$TEST_DIR" && claude -p "$STATUS_PROMPT" --dangerously-skip-permissions 2>&1)
-echo "$STATUS_OUTPUT" | head -30
-
-# Check daemon started
-if echo "$STATUS_OUTPUT" | grep -q '"daemon_running": true'; then
-  echo "OK: Daemon is running"
-elif echo "$STATUS_OUTPUT" | grep -q 'daemon_running.*true'; then
-  echo "OK: Daemon is running"
+# Check daemon is running
+if [[ -f "$TEST_DIR/.cron/cron.pid" ]]; then
+  DAEMON_PID=$(cat "$TEST_DIR/.cron/cron.pid")
+  if kill -0 "$DAEMON_PID" 2>/dev/null; then
+    echo "OK: Daemon running (PID $DAEMON_PID)"
+  else
+    echo "FAIL: PID file exists but daemon is dead"
+    exit 1
+  fi
 else
-  echo "WARN: Could not confirm daemon status from output (may still be starting)"
+  echo "FAIL: No PID file — daemon never started"
+  exit 1
 fi
 
 echo ""
-echo "--- Step 3: Wait for cron job to execute (~70s) ---"
+echo "--- Step 3: Wait for the job to execute (~90s max) ---"
 
 WAITED=0
 MAX_WAIT=90
 while [[ $WAITED -lt $MAX_WAIT ]]; do
-  if [[ -f "$MARKER" ]]; then
-    echo "Marker file appeared after ${WAITED}s"
+  if [[ -f "$TEST_DIR/disk-usage.log" ]]; then
+    echo "Output file appeared after ${WAITED}s"
     break
   fi
   sleep 5
   WAITED=$((WAITED + 5))
-  echo "  waiting... ${WAITED}s"
+  printf "  waiting... %ds\r" "$WAITED"
 done
+echo ""
 
 echo ""
 echo "--- Step 4: Verify results ---"
 
-# Check marker file
-if [[ ! -f "$MARKER" ]]; then
-  echo "FAIL: Marker file was not created after ${MAX_WAIT}s"
-  echo "--- Debug: PID file ---"
+if [[ ! -f "$TEST_DIR/disk-usage.log" ]]; then
+  echo "FAIL: disk-usage.log was not created after ${MAX_WAIT}s"
+  echo ""
+  echo "Debug — crontab:"
+  cat "$TEST_DIR/.cron/crontab"
+  echo ""
+  echo "Debug — PID:"
   cat "$TEST_DIR/.cron/cron.pid" 2>/dev/null || echo "(missing)"
-  echo "--- Debug: Log files ---"
-  ls -la "$TEST_DIR/.cron/log/" 2>/dev/null || echo "(no log dir)"
+  echo ""
+  echo "Debug — logs:"
   cat "$TEST_DIR/.cron/log/"*.log 2>/dev/null || echo "(no logs)"
   exit 1
 fi
 
-MARKER_CONTENT=$(cat "$MARKER")
-echo "Marker file contents:"
-echo "$MARKER_CONTENT"
+echo "disk-usage.log contents:"
+cat "$TEST_DIR/disk-usage.log"
+echo ""
 
-if echo "$MARKER_CONTENT" | grep -q 'cron-integration-test-'; then
-  echo "OK: Cron job executed correctly"
+# Verify it looks like du output (contains a size + path)
+if grep -qE '[0-9]' "$TEST_DIR/disk-usage.log"; then
+  echo "OK: Output contains disk usage data"
 else
-  echo "FAIL: Marker file has unexpected contents"
+  echo "FAIL: Output doesn't look like du output"
   exit 1
 fi
 
-# Check logs
+# Check daemon logs
 echo ""
-echo "--- Log output ---"
+echo "--- Daemon logs ---"
 LOG_DIR="$TEST_DIR/.cron/log"
 if [[ -d "$LOG_DIR" ]]; then
-  cat "$LOG_DIR"/*.log | head -20
-  if grep -q 'CMD' "$LOG_DIR"/*.log; then
-    echo "OK: Logs contain CMD entries"
-  else
-    echo "WARN: No CMD entries in logs"
-  fi
-  if grep -q 'STARTUP' "$LOG_DIR"/*.log; then
-    echo "OK: Logs contain STARTUP"
-  fi
+  cat "$LOG_DIR"/*.log
+  echo ""
+  grep -c 'CMD' "$LOG_DIR"/*.log | while IFS=: read -r f c; do
+    echo "OK: $c CMD entries in logs"
+  done
+  grep -q 'STARTUP' "$LOG_DIR"/*.log && echo "OK: STARTUP logged"
+  grep -q 'CMDEND' "$LOG_DIR"/*.log && echo "OK: CMDEND logged"
 else
-  echo "WARN: No log directory found"
+  echo "WARN: No log directory"
 fi
 
 echo ""
 echo "=== PASS: Integration test succeeded ==="
+echo "Claude scheduled a disk usage monitor via cron. Job executed and produced output."
