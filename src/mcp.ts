@@ -46,9 +46,21 @@ if (!running) {
     detached: true,
     stdio: 'ignore',
   });
+  child.on('error', (err) => console.error('crond-js: failed to start daemon:', err.message));
   child.unref();
-  // Brief wait for PID file to appear
-  await new Promise(r => setTimeout(r, 500));
+  // Poll for daemon to be ready (PID file written + process alive), up to 5s
+  const POLL_INTERVAL = 200;
+  const POLL_TIMEOUT = 5000;
+  let waited = 0;
+  while (waited < POLL_TIMEOUT) {
+    await new Promise(r => setTimeout(r, POLL_INTERVAL));
+    waited += POLL_INTERVAL;
+    const status = checkDaemon(resolvedPidFile);
+    if (status.running) break;
+  }
+  if (waited >= POLL_TIMEOUT) {
+    console.warn('crond-js: daemon did not start within 5s — continuing anyway');
+  }
 }
 
 // Parse today's log for last run info

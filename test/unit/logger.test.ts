@@ -32,6 +32,22 @@ describe('createLogger', () => {
     expect(files).toHaveLength(1);
   });
 
+  it('re-creates the log directory if deleted while running', () => {
+    const logger = createLogger(tmpDir, false);
+    logger.log('CMD', './first.sh');
+
+    // Simulate the log directory being deleted externally
+    rmSync(tmpDir, { recursive: true, force: true });
+
+    // Second write should NOT throw — directory should be re-created
+    expect(() => logger.log('CMD', './second.sh')).not.toThrow();
+
+    const files = readdirSync(tmpDir);
+    expect(files).toHaveLength(1);
+    const content = readFileSync(join(tmpDir, files[0]), 'utf-8');
+    expect(content).toContain('./second.sh');
+  });
+
   it('appends multiple log lines to the same file', () => {
     const logger = createLogger(tmpDir, false);
     logger.log('CMD', './a.sh');

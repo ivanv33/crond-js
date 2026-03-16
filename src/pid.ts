@@ -39,3 +39,30 @@ export function removePid(pidPath: string): void {
     // Already gone
   }
 }
+
+/**
+ * Send SIGTERM to a daemon and wait for it to exit.
+ * Polls isProcessAlive every `intervalMs` up to `timeoutMs`.
+ * Only removes the PID file if the daemon's own cleanup didn't.
+ * Throws if the process doesn't exit within the timeout.
+ */
+export async function stopDaemon(
+  pid: number,
+  pidPath: string,
+  { timeoutMs = 5000, intervalMs = 100 } = {},
+): Promise<void> {
+  process.kill(pid, 'SIGTERM');
+
+  const deadline = Date.now() + timeoutMs;
+  while (isProcessAlive(pid)) {
+    if (Date.now() >= deadline) {
+      throw new Error(`Process ${pid} did not exit within ${timeoutMs}ms after SIGTERM`);
+    }
+    await new Promise((r) => setTimeout(r, intervalMs));
+  }
+
+  // Clean up PID file only if the daemon didn't remove it itself
+  if (readPid(pidPath) !== null) {
+    removePid(pidPath);
+  }
+}

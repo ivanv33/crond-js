@@ -20,7 +20,6 @@ function dateSlug(): string {
 }
 
 export function createLogger(logDir: string, foreground: boolean): Logger {
-  let dirCreated = false;
   const pid = process.pid;
 
   return {
@@ -31,10 +30,7 @@ export function createLogger(logDir: string, foreground: boolean): Logger {
         process.stdout.write(line);
       }
 
-      if (!dirCreated) {
-        mkdirSync(logDir, { recursive: true });
-        dirCreated = true;
-      }
+      mkdirSync(logDir, { recursive: true });
 
       const logFile = join(logDir, `${dateSlug()}.log`);
       appendFileSync(logFile, line);

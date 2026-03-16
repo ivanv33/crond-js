@@ -68,4 +68,12 @@ describe('parseCrontab', () => {
     expect(cronMatchDate(jobs[0].cron, match)).toBe(true);
     expect(cronMatchDate(jobs[0].cron, noMatch)).toBe(false);
   });
+
+  it('matches dates with non-zero milliseconds via cronMatchDate', () => {
+    const jobs = parseCrontab('30 14 * * * ./afternoon.sh');
+    expect(jobs).toHaveLength(1);
+    // Date with 500ms — should still match the 14:30 minute
+    const dateWithMs = new Date(2026, 2, 16, 14, 30, 0, 500);
+    expect(cronMatchDate(jobs[0].cron, dateWithMs)).toBe(true);
+  });
 });

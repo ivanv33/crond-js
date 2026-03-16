@@ -1,6 +1,6 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { spawn, execSync } from 'node:child_process';
-import { mkdirSync, writeFileSync, readFileSync, rmSync, existsSync } from 'node:fs';
+import { mkdirSync, writeFileSync, readFileSync, rmSync, existsSync, readdirSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
 const projectRoot = resolve(import.meta.dirname, '../..');
@@ -108,7 +108,7 @@ describe('daemon e2e', () => {
 
     // Check logs for RELOAD
     const logDir = join(dir, '.cron/log');
-    const logs = readFileSync(join(logDir, existsSync(logDir) ? require('fs').readdirSync(logDir)[0] : ''), 'utf-8');
+    const logs = readFileSync(join(logDir, existsSync(logDir) ? readdirSync(logDir)[0] : ''), 'utf-8');
     expect(logs).toContain('RELOAD');
     expect(existsSync(outputFile2)).toBe(true);
   }, 90_000);
@@ -185,7 +185,7 @@ describe('daemon e2e', () => {
     await sleep(500);
 
     const logDir = join(dir, '.cron/log');
-    const files = require('fs').readdirSync(logDir) as string[];
+    const files = readdirSync(logDir) as string[];
     expect(files.length).toBeGreaterThan(0);
 
     const logContent = readFileSync(join(logDir, files[0]), 'utf-8');

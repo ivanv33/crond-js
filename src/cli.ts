@@ -3,7 +3,7 @@
 import { spawn } from 'node:child_process';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { checkDaemon, removePid, readPid, isProcessAlive } from './pid.js';
+import { checkDaemon, removePid, readPid, isProcessAlive, stopDaemon } from './pid.js';
 import { startDaemon } from './daemon.js';
 import { dirname, join } from 'node:path';
 
@@ -50,8 +50,12 @@ if (flags.has('-k') || flags.has('--stop')) {
     console.log('crond-js is not running');
     process.exit(0);
   }
-  process.kill(pid, 'SIGTERM');
-  removePid(resolvedPidFile);
+  try {
+    await stopDaemon(pid, resolvedPidFile);
+  } catch (err) {
+    console.error(`Failed to stop crond-js: ${(err as Error).message}`);
+    process.exit(1);
+  }
   console.log(`crond-js stopped (PID ${pid})`);
   process.exit(0);
 }

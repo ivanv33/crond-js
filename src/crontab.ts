@@ -2,6 +2,7 @@ import { Cron } from 'croner';
 import { readFile } from 'node:fs/promises';
 
 export interface CronJob {
+  id: number;
   schedule: string;
   command: string;
   cron: Cron;
@@ -12,7 +13,7 @@ export function cronMatchDate(cron: Cron, date: Date): boolean {
   const prev = new Date(date.getTime() - 60_000);
   const next = cron.nextRun(prev);
   if (!next) return false;
-  return next.getTime() === date.getTime();
+  return Math.floor(next.getTime() / 60_000) === Math.floor(date.getTime() / 60_000);
 }
 
 export function parseCrontab(content: string): CronJob[] {
@@ -33,7 +34,7 @@ export function parseCrontab(content: string): CronJob[] {
 
     try {
       const cron = new Cron(schedule, { paused: true });
-      jobs.push({ schedule, command, cron });
+      jobs.push({ id: jobs.length, schedule, command, cron });
     } catch {
       console.warn(`crond-js: skipping invalid schedule "${schedule}": ${line}`);
     }
