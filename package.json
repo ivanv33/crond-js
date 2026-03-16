@@ -1,0 +1,33 @@
+{
+  "name": "crond-js",
+  "version": "1.0.0",
+  "description": "Project-local cron daemon that reads a standard crontab file",
+  "type": "module",
+  "bin": {
+    "crond-js": "./dist/cli.js",
+    "crond-mcp": "./dist/mcp.js"
+  },
+  "files": [
+    "dist/"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "test:unit": "vitest run test/unit/",
+    "test:e2e": "vitest run test/e2e/ --testTimeout=120000",
+    "test": "vitest run",
+    "prepublishOnly": "tsc"
+  },
+  "keywords": ["cron", "daemon", "mcp", "crontab"],
+  "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "croner": "^9.0.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.0",
+    "@types/node": "^22.0.0",
+    "vitest": "^3.0.0"
+  }
+}
