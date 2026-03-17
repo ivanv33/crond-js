@@ -4,8 +4,8 @@
   "description": "Project-local cron daemon that reads a standard crontab file",
   "type": "module",
   "bin": {
-    "crond-js": "./dist/cli.js",
-    "crond-mcp": "./dist/mcp.js"
+    "crond-js": "dist/cli.js",
+    "crond-mcp": "dist/mcp.js"
   },
   "files": [
     "dist/"
