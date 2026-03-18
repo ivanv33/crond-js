@@ -30,7 +30,7 @@ export function createLogger(logDir: string, foreground: boolean): Logger {
         process.stdout.write(line);
       }
 
-      mkdirSync(logDir, { recursive: true });
+      mkdirSync(logDir, { recursive: true, mode: 0o700 });
 
       const logFile = join(logDir, `${dateSlug()}.log`);
       appendFileSync(logFile, line);

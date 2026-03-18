@@ -42,7 +42,9 @@ if (!running) {
   const thisFile = fileURLToPath(import.meta.url);
   const ext = thisFile.endsWith('.ts') ? '.ts' : '.js';
   const cliPath = fileURLToPath(new URL(`./cli${ext}`, import.meta.url));
-  const child = spawn(process.execPath, [...process.execArgv, cliPath, resolvedCrontab, '-p', resolvedPidFile], {
+  // Strip debug/inspect flags to avoid exposing a debug port on the background daemon
+  const safeExecArgv = process.execArgv.filter(arg => !arg.startsWith('--inspect') && !arg.startsWith('--debug'));
+  const child = spawn(process.execPath, [...safeExecArgv, cliPath, resolvedCrontab, '-p', resolvedPidFile], {
     detached: true,
     stdio: 'ignore',
   });

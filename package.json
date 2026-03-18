@@ -1,6 +1,6 @@
 {
   "name": "crond-js",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Project-local cron daemon that reads a standard crontab file",
   "type": "module",
   "bin": {

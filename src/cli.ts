@@ -63,7 +63,9 @@ if (flags.has('-k') || flags.has('--stop')) {
 // --daemon (fork and exit)
 if (flags.has('-d') || flags.has('--daemon')) {
   // Re-invoke with the same argv[0..1] so tsx/node/bun all work
-  const execArgs = [...process.execArgv, fileURLToPath(import.meta.url), resolvedCrontab, '-p', resolvedPidFile];
+  // Strip debug/inspect flags to avoid exposing a debug port on the background daemon
+  const safeExecArgv = process.execArgv.filter(arg => !arg.startsWith('--inspect') && !arg.startsWith('--debug'));
+  const execArgs = [...safeExecArgv, fileURLToPath(import.meta.url), resolvedCrontab, '-p', resolvedPidFile];
   const child = spawn(process.execPath, execArgs, {
     detached: true,
     stdio: 'ignore',

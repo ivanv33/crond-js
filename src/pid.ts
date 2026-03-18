@@ -1,20 +1,43 @@
-import { readFileSync, writeFileSync, unlinkSync } from 'node:fs';
+import { readFileSync, writeFileSync, unlinkSync, openSync, writeSync, closeSync, constants } from 'node:fs';
 
+/**
+ * Atomically create a PID file using O_EXCL to prevent races.
+ * If a stale PID file exists (process dead), removes it and retries once.
+ */
 export function writePid(pidPath: string): void {
-  writeFileSync(pidPath, String(process.pid), 'utf-8');
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const fd = openSync(pidPath, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL, 0o644);
+      writeSync(fd, String(process.pid));
+      closeSync(fd);
+      return;
+    } catch (err: unknown) {
+      if ((err as NodeJS.ErrnoException).code !== 'EEXIST') throw err;
+      // File exists — check if the owning process is still alive
+      const existingPid = readPid(pidPath);
+      if (existingPid !== null && isProcessAlive(existingPid)) {
+        throw new Error(`crond-js: PID file ${pidPath} held by live process ${existingPid}`);
+      }
+      // Stale PID file — remove and retry
+      removePid(pidPath);
+    }
+  }
+  throw new Error(`crond-js: failed to acquire PID file ${pidPath} after 2 attempts`);
 }
 
 export function readPid(pidPath: string): number | null {
   try {
     const content = readFileSync(pidPath, 'utf-8').trim();
     const pid = parseInt(content, 10);
-    return isNaN(pid) ? null : pid;
+    if (isNaN(pid) || pid <= 0) return null;
+    return pid;
   } catch {
     return null;
   }
 }
 
 export function isProcessAlive(pid: number): boolean {
+  if (pid <= 0) return false;
   try {
     process.kill(pid, 0);
     return true;

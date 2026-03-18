@@ -127,13 +127,29 @@ function cleanup(): void {
     timer = null;
   }
 
-  // Kill all running child processes before removing PID file
+  // SIGTERM all running child processes
   for (const [id, child] of runningJobs) {
     try {
       child.kill('SIGTERM');
     } catch {
       // Process may have already exited
     }
+  }
+
+  // Give children 2s to exit, then SIGKILL any survivors
+  if (runningJobs.size > 0) {
+    const deadline = Date.now() + 2000;
+    const remaining = [...runningJobs.entries()];
+    const check = () => {
+      for (const [id, child] of remaining) {
+        if (child.exitCode === null && child.killed === false) {
+          if (Date.now() >= deadline) {
+            try { child.kill('SIGKILL'); } catch { /* already dead */ }
+          }
+        }
+      }
+    };
+    check();
   }
   runningJobs.clear();
 
@@ -169,7 +185,7 @@ export function startDaemon(crontabFile: string, options: DaemonOptions = {}): v
   logger = createLogger(logDir, foreground);
   writePid(pidPath);
   isRunning = true;
-  logger.log('STARTUP', 'crond-js 1.0.0');
+  logger.log('STARTUP', 'crond-js 1.0.1');
 
   // Clean shutdown on signals — re-entrancy guard prevents double cleanup
   let cleaningUp = false;
